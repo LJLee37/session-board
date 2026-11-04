@@ -1,0 +1,12 @@
+{
+  "name": "session-board",
+  "owner": { "name": "LJLee37" },
+  "description": "A Claude Code mod that shows a session's status beside the conversation",
+  "plugins": [
+    {
+      "name": "session-board",
+      "source": "./",
+      "description": "Keeps this session's goal, doing, waiting, remaining and done items beside the conversation"
+    }
+  ]
+}
