@@ -146,11 +146,12 @@ app-3f                 ~/work/app  로그인 화면 고치기  1     0       1  
 ## 아직 시험하지 못한 것
 
 - auto 모드가 아닐 때 이 도구에 권한 창이 뜨는지. 문서대로라면 뜨지 않아야 합니다.
-- Remote Control 화면에 보이는지. 안 보이면 `/board show` 를 쓰세요.
+- Remote Control 화면에 pane 과 한 줄 표시가 보이는지. 안 보이면 `/board show` 를 쓰세요.
 - 터미널 폭을 바꿀 때의 전환.
 - 갑작스런 전원 끊김 뒤 남은 등록 파일. 시작 시각을 맞춰 걸러 내지만 가짜 파일로만 시험했습니다.
 
-재부팅하고 `--resume` 으로 재개한 세션은 같은 보드를 이어 읽었습니다(2.1.318).
+재부팅하고 `--resume` 으로 재개한 세션은 같은 보드를 이어 읽었습니다(2.1.318). `/board show` 는 Remote Control 에서도
+동작했습니다(2.1.318).
 
 ## 개발
 
@@ -163,3 +164,7 @@ shellcheck bin/session-boards tests/session-boards.test.sh
 
 타입 검사는 mod 가 한 번 로드된 뒤 `tsc -p .` 로 합니다. `.claude-plugin/types/` 와 `tsconfig.json` 이 참조하는 타입은
 엔진이 만듭니다.
+
+## 라이선스와 연락
+
+[MIT](LICENSE). 문의는 GitHub 이슈나 LJLee37 (ljlee3759@gmail.com) 으로 주세요.
