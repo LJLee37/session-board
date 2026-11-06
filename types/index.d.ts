@@ -28,6 +28,9 @@ export type Board = {
   updatedAt: number
   // Turns that did work without touching the board, since the last write.
   staleTurns: number
+  // The folder the session started in, kept from the first save on, so a shell
+  // command can say where to resume it after a reboot. Absent before 0.2.0.
+  cwd?: string
 }
 
 // The input of the mod's tool; loose JSON from the model until apply_update checks it.

@@ -92,12 +92,18 @@ let didWork = false
 let didUpdate = false
 let needsReinject = false
 let isOpening = false
+// Where the session started, saved into its board so that `session-boards` can
+// name the folder to resume it in.
+let startCwd: string | undefined
+// Board files already made private by this process.
+const privatePaths = new Set<string>()
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     // Headless runs (the SDK, `claude -p`) get no tool, no command and no nudges.
     if (e.isInteractive) {
       isLive = true
+      startCwd = e.cwd
       await $.command.register({
         name: 'board',
         description: "Open or edit this session's board",
@@ -398,11 +404,35 @@ async function sync_session($: EngineInterface): Promise<Board> {
 
 async function save_board($: EngineInterface, board: Board) {
   const sessionId = await $.session.id()
-  await update($, viewAtom, () => ({ sessionId, board }))
+  // The first folder stays: a resume has to start from it anyway.
+  const saved = board.cwd === undefined && startCwd !== undefined ? { ...board, cwd: startCwd } : board
+  await update($, viewAtom, () => ({ sessionId, board: saved }))
   const path = await board_path($, sessionId)
 
   if (path !== undefined) {
-    await $.fs.write(path, `${JSON.stringify(board, null, 2)}\n`)
+    await $.fs.write(path, `${JSON.stringify(saved, null, 2)}\n`)
+    await make_private($, path)
+  }
+}
+
+// `$.fs.write` takes no mode and a new file comes out 644, while a rewrite keeps
+// the mode it finds. So once per path and process: that also tightens a board
+// and folder an older version left readable. A failure costs no save.
+async function make_private($: EngineInterface, path: string) {
+  if (privatePaths.has(path)) {
+    return
+  }
+
+  privatePaths.add(path)
+
+  try {
+    const ran = await $.process.run(['chmod', 'go-rwx', path.slice(0, path.lastIndexOf('/')), path])
+
+    if (ran.exitCode !== 0) {
+      $.ui.log(`session-board: chmod ${path} exited ${ran.exitCode}: ${ran.stderr.trim()}`, { to: 'debug' })
+    }
+  } catch (error) {
+    $.ui.log(`session-board: chmod ${path} failed: ${String(error)}`, { to: 'debug' })
   }
 }
 

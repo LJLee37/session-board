@@ -160,10 +160,28 @@ describe('formatting', () => {
 
 // The world beneath the mod: a session id, a file system held in memory, and a
 // pane list the test sets. Records what the mod opened, closed and registered.
-function stage(on: On, files: Record<string, string> = {}, panes: { value: unknown[] } = { value: [] }) {
+function stage(
+  on: On,
+  files: Record<string, string> = {},
+  panes: { value: unknown[] } = { value: [] },
+  runExit = 0,
+) {
   mock.clock(on, { now: NOW })
   mock.env(on, { HOME: '/home/t' })
-  const seen = { tools: [] as string[], commands: [] as string[], opened: 0, closed: 0, contexts: [] as string[][] }
+  const seen = {
+    tools: [] as string[],
+    commands: [] as string[],
+    opened: 0,
+    closed: 0,
+    contexts: [] as string[][],
+    runs: [] as string[][],
+  }
+
+  on('process.run', ($, e) => {
+    seen.runs.push([...e.argv])
+    const stderr = runExit === 0 ? '' : 'Operation not permitted'
+    return { value: { exitCode: runExit, stdout: '', stderr, isStdoutTruncated: false, isStderrTruncated: false } }
+  })
 
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('session.id', () => ({ value: 's1' }))
@@ -268,6 +286,60 @@ test('the tool saves the board by session id and answers with it', async ($, on)
 
   expect(ran.text ?? JSON.stringify(ran.result)).toContain('목표 하나')
   expect(parse_board(files[FILE] ?? '')?.items[0]?.text).toBe('일')
+})
+
+test('the board keeps the folder the session started in', async ($, on) => {
+  const files: Record<string, string> = {}
+  stage(on, files)
+
+  await $.session.start({ ...INTERACTIVE, cwd: '/home/t/proj' })
+  await $.tool.call({ tool: TOOL, goal: '목표' })
+
+  expect(parse_board(files[FILE] ?? '')?.cwd).toBe('/home/t/proj')
+})
+
+test('a resume elsewhere keeps the first folder', async ($, on) => {
+  const files: Record<string, string> = { [FILE]: JSON.stringify({ ...SAMPLE, cwd: '/home/t/first' }) }
+  stage(on, files)
+
+  await $.session.start({ ...INTERACTIVE, cwd: '/home/t/second' })
+  await $.tool.call({ tool: TOOL, items: [{ id: 3, state: 'doing' }] })
+
+  expect(parse_board(files[FILE] ?? '')?.cwd).toBe('/home/t/first')
+})
+
+test('a board without a folder, from 0.1.0, gets one on its next save', async ($, on) => {
+  const files: Record<string, string> = { [FILE]: JSON.stringify(SAMPLE) }
+  stage(on, files)
+
+  await $.session.start({ ...INTERACTIVE, cwd: '/home/t/proj' })
+  await $.tool.call({ tool: TOOL })
+
+  expect(parse_board(files[FILE] ?? '')?.cwd).toBe('/home/t/proj')
+  expect(parse_board(files[FILE] ?? '')?.items).toEqual(SAMPLE.items)
+})
+
+test('the board file and folder are made private once per process', async ($, on) => {
+  const files: Record<string, string> = {}
+  const seen = stage(on, files)
+
+  await $.session.start(INTERACTIVE)
+  await $.tool.call({ tool: TOOL, goal: '목표' })
+  await $.tool.call({ tool: TOOL, items: [{ text: '일' }] })
+
+  expect(seen.runs).toEqual([['chmod', 'go-rwx', '/home/t/.claude/session-boards', FILE]])
+})
+
+test('a chmod that fails does not cost the save', async ($, on) => {
+  const files: Record<string, string> = {}
+  const seen = stage(on, files, { value: [] }, 1)
+
+  await $.session.start(INTERACTIVE)
+  const ran = await $.tool.call({ tool: TOOL, goal: '목표 하나' })
+
+  expect(seen.runs.length).toBe(1)
+  expect(ran.deny).toBeUndefined()
+  expect(parse_board(files[FILE] ?? '')?.goal).toBe('목표 하나')
 })
 
 test('a bad update is refused and changes nothing', async ($, on) => {
